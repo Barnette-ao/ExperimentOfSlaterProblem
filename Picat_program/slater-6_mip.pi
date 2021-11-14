@@ -1,0 +1,274 @@
+%%% Computing slater winner in picat. The following literature can imporve the computation of slater winner:
+%%% Computing Slater Rankings Using Similarities Among Candidates, Vincent Conitzer
+%%% Author: Yisong Wang, yswang@gzu.edu.cn
+%%% 2021.8.7
+%%% To run: 
+%%% picat THIS_FILE INSTANCE_FILE OPTIMIZATION(1/0)
+/*
+[wys@ai asp]$ picat slater-6 "ver3" "1"
+The slater order = {4,0,2,3,7,5,9,8,6,1}
+winner = 7 with cost = 4
+CPU time 45.59 seconds.
+success
+[wys@ai asp]$ picat slater-6 "ver3" "0"
+winner = 8
+CPU time 0.0 seconds.
+success
+*/
+
+
+import mip.  %% the module sat, cp, mip can also be used here. It seems that cp is the most efficient one.
+import ordset. 
+import v3_utils.
+
+ %% WHEN using cp, IT DOES NOT WORK, THIS IS SOLVED BY REPLACING := WITH = IN THE MAIN CLAUSE. 
+ %% THANKS TO NENGFA ZHOU.
+% import build_tournament.
+
+main([Instance, No_optimization]) => 
+    load('build_tournament3.pi'),
+    build_graph([Instance]), %% build the graph and load its arcs, which will load the graph in the form of arc(.,.) 
+	Time_out := 1000*60*1*10,  %% in 30 minutes
+	if No_optimization == "1" then
+		time_out(time(solve), Time_out, Result) 
+	else
+		time_out(time(slater_winner), Time_out, Result)
+	end,
+	println(Result). 
+
+
+%%% X, Y are two candidats in list E of candidates, find the similar candidates set in E, starting from  X and Y
+similar_candidate_2(X, Y, E) = SC => 
+    SC := [X,Y], 
+    OutX = findall(Y1, arc(X,Y1,_)), InX = findall(Y2, arc(Y2,X,_)),
+    OutY = findall(X1, arc(Y,X1,_)), InY = findall(X2, arc(X2,Y,_)),
+    L1 = intersection(intersection(OutX, InY), E),  
+    L2 = intersection(intersection(InX, OutY), E),  
+    SC := SC ++ L1 ++ L2,
+     
+    Added := 1,
+    while(Added == 1)
+        Added := 0,  SC := sort(SC),  
+        TE := subtract(sort(E), SC  ), %%% println(te=TE), %%% subtract is related to the order of elements in the list, so a sort is necessary
+        foreach(C in TE)
+            if arc(A,C,_) && arc(C, B, _) && member(A, SC) && member(B, SC) then
+                SC := SC ++ [C], Added := 1  
+            else
+                true
+            end 
+        end
+    end.
+
+/*
+    WL is a map with keys are the candidate list and the values are the weigth of each candidate
+    SL is the list of similar candidates of pairs {S, W}: W is the weight of the set S of similar candidate 
+*/
+
+similar_candidate_list(WL) = SL =>
+    L := keys(WL), 
+    W := values(WL),
+    N := len(L),
+    SL := [], 
+    W := [],  
+    FailArray = new_array(N,N),   FailArray :: 0..1,
+    foreach(I in 1..N)
+		FailArray[I,I] := 1,
+        foreach(J in 1..I-1)
+            FailArray[I,J] := 0, FailArray[J,I] := 0
+        end
+    end,
+    TL := L, 
+	Fail := N,
+    while(len(TL) >= 3 && Fail < N*N)
+        while( member(X,TL) && member(Y, TL) && X != Y && FailArray[X,Y] != 1 && FailArray[Y,X] != 1) %%% here " FailArray[X,Y] != 1 && FailArray[Y,X] != 1" should be at the end of the condition  
+                SL2 := similar_candidate_2(X, Y, L),  
+                if  len(SL2) != 2  && len(SL2) < N then %% SL2 is a nontrivial similar candidate set
+                    Weight := sum([get(WL, SL2[K]) : K in 1..len(SL2)]),
+                    SL := SL ++ [(SL2, Weight)],   
+                    TL := subtract(sort(TL), sort(SL2) )
+                else
+                    FailArray[X,Y] := 1, FailArray[Y,X] := 1, Fail := Fail + 2
+                end
+            
+        end 
+    end,  
+    %%% Each candidate in the remaining candidates TL is a similar candidate, then append it to SL
+	if len(TL) < N then
+		foreach (C in TL)
+			append(SL, [([C], get(WL, C))], AL), 
+			SL := AL
+		end
+	else
+		SL := [(L, N)]
+	end.
+
+
+
+%%% COMPUTE A SLATER ORDER FOR THESE CANDIDATES IN THE LIST L WITH WEIGHT W TO SL
+%%% E.G., L=[1,2,5], W=[1,1,3]), WHICH MEANS THE WEIGHT OF CANDIDATE 1,2,5 IS 1, 1 AND 3 REPECTIVELY.
+
+slater_winner_w(L, W) = SL => 
+	N = len(L),
+	RT = new_array(N,N),  % reversed tournament, goal tournament
+	OT = new_array(N,N),  % the original tournament graph
+    DT = new_array(N,N),  % the difference between RT and OT, the reversed arcs of tournament graph 
+	OD = new_array(N),    % the out degree of slater tournament, all_different(OD): 
+ 	SD = new_array(N),    % the sumation of each candidate in the DT
+	AW = new_array(N),
+	RT :: 0..1,
+	OT :: 0..1,
+	DT :: 0..1,
+	OD :: 0..N-1,
+	foreach (I in 1..N)
+		AW[I] = W[I],  
+        OD[I] #= sum(RT[I]),
+	    SD[I] #= sum(DT[I])
+    end, 
+	foreach (I in 1..N)
+        DT[I,I] #= 0,
+	    foreach (J in 1..I-1)
+	      DT[J,I] #= (RT[J,I] + OT[J,I]) mod 2, 
+	      DT[I,J] #= DT[J,I]
+	   end
+	end,
+	RN = new_array(N),
+	foreach (I in 1..N)
+		RN[I] #= sum([DT[I,J]*AW[I]*AW[J]: J in 1..N]) %%%% if AW is replaced by W, then it does not work for unkown reason
+	end,
+	RNS #= sum(RN)//2,
+	 
+        foreach(I in 1..N)
+            OT[I,I] := 0, RT[I,I] := 0,
+            foreach (J in 1..I-1)
+               if arc(L[I],L[J],_) then %%%% L[I] AND L[J] ARE THE Ith and Jth ELEMENTS IN L
+		    OT[I,J] #=1
+	        else
+                OT[I,J] #= 0
+            end,
+            OT[I,J] + OT[J,I] #= 1,
+            RT[I,J] + RT[J,I] #= 1
+           end
+        end,
+
+	all_different(OD), %%% CONSTRAINT THE RT TO BE A TOURNAMENT: A LINEAR ORDER
+	%%%% FOR ONE SOLUTION
+	solve($[min(RNS)],  {OD}++{RN}++{SD}++RT++DT++OT),
+	%%% println(od=OD), println(sd=SD), println(rt=RT), println(ot=OT), println(dt=DT),
+	%% println('The slater order'= OD),
+	SL := [L] ++ [RNS],
+    foreach (J in 1..N)
+             if OD[J] == N-1 then
+			 	SL := SL ++ [L[J]] %,
+                %print(winner=L[J]), println(' with cost'= RNS)
+             end
+	end,
+	SL := SL ++ [OD]. %%% return the [candidate_list, cost, winner, slater_order_list]
+
+slater_winner =>
+	candidate(L),  % the list of candidates, WE ASSUME THAT L IS IN THE FORM 1..N
+    N = len(L),  
+	SL := similar_candidate_list(new_map([L[I] = 1: I in 1..N])), %println(sl=SL),
+	%%% Get the slater winner of the similar candidates
+	if len(SL) ==  1 then
+		solve
+	elseif len(SL) == 2 then
+		SCL := cond(arc(SL[1,1,1], SL[2,1,1], _), SL[1,1], SL[2,1]),
+                SCW := new_list(len(SCL), 1),
+		WL := slater_winner_w(SCL, SCW), %println(wl=WL),
+		Winner := WL[3], Cost := WL[2],
+		print(winner=Winner), println(' with the least cost'=Cost)
+	else
+		SCL := [], 	SCW := [],
+		foreach (I in 1..len(SL))
+			SCL := SCL ++ [SL[I,1,1]],
+			SCW := SCW ++ [SL[I,2]]
+		end,
+		SP := new_map([SCL[I]=I: I in 1..len(SCL)]),
+		WL := slater_winner_w(SCL, SCW), %print(scl=SCL), print(scw=SCW), println(wl=WL),
+		Cost := WL[2],  
+		%%% compute the winner in the first similar candidates in the case we just need the winner, instead of the overall slater order
+		SCL := SL[get(SP, WL[3]), 1], SCW := new_list(len(SCL), 1),  
+		if len(SCL) == 1  then
+			Winner := SCL[1]
+		elseif len(SCL) == 2 then
+			Winner := cond(arc(SCL[1], SCL[2], _), SCL[1], SCL[2])
+		else
+			WL := slater_winner_w(SCL, SCW), %println(wl=WL),
+			Winner := WL[3], Cost := Cost + WL[2]
+		end,
+		print(winner=Winner), println(' with the least cost'=Cost)
+	end.
+
+
+
+%%%% THE NEXT ALGORITHM DOES NOT MAKE USE OF SIMILAR CANDIDATES
+solve =>
+	candidate(L),  % the list of candidates, WE ASSUME THAT L IS IN THE FORM 1..N
+    N = len(L),
+
+	RT = new_array(N,N),  % reversed tournament, goal tournament
+	OT = new_array(N,N),  % the original tournament graph
+    DT = new_array(N,N),  % the difference between RT and OT, the reversed arcs of tournament graph 
+	OD = new_array(N),     % the out degree of slater tournament, all_different(OD): 
+ 	SD = new_array(N),    % the sumation of each candidate in the DT
+	RT :: 0..1,
+	OT :: 0..1,
+	DT :: 0..1,
+	OD :: 0..N-1,
+	foreach (I in 1..N)
+           OD[I] #= sum(RT[I]),
+	   SD[I] #= sum(DT[I])
+        end,
+	foreach (I in 1..N)
+           DT[I,I] #= 0,
+	   foreach (J in 1..I-1)
+	      DT[J,I] #= (RT[J,I] + OT[J,I]) mod 2, 
+	      DT[I,J] #= DT[J,I]
+	   end
+	end,
+	RN #= sum(SD)//2,
+        foreach(I in 1..N)
+           OT[I,I] := 0, RT[I,I] := 0,
+           foreach (J in 1..I-1)
+               if arc(I,J,_) then
+		  OT[I,J] #=1
+	       else
+                  OT[I,J] #= 0
+               end,
+               OT[I,J] + OT[J,I] #= 1,
+               RT[I,J] + RT[J,I] #= 1
+           end
+        end,
+
+	all_different(OD), %%% CONSTRAINT THE RT TO BE A TOURNAMENT: A LINEAR ORDER
+
+	
+	%%%% FOR ONE SOLUTION
+	solve($[min(RN)],  {OD}++{{RN}}++{SD}++RT++DT++OT),
+	%%% println(od=OD), println(sd=SD), println(rt=RT), println(ot=OT), println(dt=DT),
+	%% println('The slater order'= OD),
+    foreach (J in 1..N)
+             if OD[J] == N-1 then
+                print(winner=J), println(' with cost'=RN)
+             end
+	end. 
+	
+/*
+	%%%  FOR ALL SOLUTIONS:
+
+	solve_all($[min(RN)],  {OD}++{{RN}}++{SD}++RT++DT++OT) = Solutions, %%% This does not really compute all solutions
+% 	println(solutions=Solutions),
+%	println(ot=OT),  println(rt=RT), println(dt=DT), println(od=OD), println(sd=SD), println(rn=RN),
+        Winners := [], Cost := 0,
+        foreach(I in 1..length(Solutions))
+            Cost := Solutions[I,2,1],
+            foreach(J in 1..N)
+                if Solutions[I,1,J] == N-1 then
+                   Winners := Winners ++ [J]
+                end
+	     end
+	end,    
+	
+	print(winners=Winners), println(' with cost'=Cost).
+
+*/

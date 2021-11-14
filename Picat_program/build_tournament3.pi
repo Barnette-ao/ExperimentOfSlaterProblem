@@ -1,0 +1,40 @@
+import v3_utils.
+
+table
+preference(X,Y, M, N) =>
+    votes(M, X, OA, N),
+    votes(M, Y, OB, N), OA < OB.
+    % X > Y has M voters at the N-th votes
+
+table
+t_edge(X,Y,N) =>
+     L = findall(M, preference(X,Y, M, _)),
+     N0 = sum (L),
+     L1 = findall(M, preference(Y,X,M,_)),
+     N1 = sum(L1),
+     N0 > N1,
+     N = N0 - N1.
+     % build the weighted Tournament
+
+assert_edge(File) =>
+    candidate(L), 
+    FD = open(File, write),
+    N = len(L), 
+    foreach (I in 1..N)
+        foreach(J in 1..I-1) 
+            if t_edge(J,I,M) then
+                write(FD, $arc(J,I,M)) , printf(FD,"%c%n", .) %%% assert($edge(J,I,M)) has no effect
+            elseif t_edge(I,J,M) then
+                 write(FD, $arc(I,J,M)),  printf(FD,"%c%n", .)
+            else
+                true
+            end
+        end  
+    end, 
+    FD.close().
+
+build_graph([File]) =>   %%% it should used in the form of  build_graph(["ver3.pi"])
+    load(File),
+    ArcFile = "/tmp/" ++ File ++ ".pi", 
+    assert_edge(ArcFile),
+    load(ArcFile).

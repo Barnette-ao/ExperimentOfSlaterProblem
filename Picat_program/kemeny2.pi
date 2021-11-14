@@ -1,0 +1,66 @@
+import sat. 
+ %% WHEN using cp, IT DOES NOT WORK, THIS IS SOLVED BY REPLACING := WITH = IN THE MAIN CLAUSE. 
+ %% THANKS TO NENGFA ZHOU.
+import build_tournament2.
+
+main([Instance]) => 
+	load(Instance),
+	time(solve).
+
+table
+solve =>
+    voters(M),
+	candidate(L),  % the list of candidates, WE ASSUME THAT L IS IN THE FORM 1..N
+    N = len(L),
+
+	RT = new_array(N,N),  % reversed tournament, goal tournament
+	OT = new_array(N,N),  % the original tournament graph
+        DT = new_array(N,N),  % the difference between RT and OT, the reversed arcs of tournament graph 
+	ID = new_array(N),     % the out degree of slater tournament, all_different(ID): 
+ 	SD = new_array(N),    % the sumation of each candidate in the DT
+	RT :: 0..M,
+	OT :: 0..M,
+	DT :: 0..M,
+	ID :: 0..N-1,
+	foreach (I in 1..N)
+           ID[I] #= count(0,RT[I]),
+	   SD[I] #= sum(DT[I])
+        end,
+	foreach (I in 1..N)
+           DT[I,I] #= 0,
+	   foreach (J in 1..I-1)
+	      if pwt(I,J,WIJ) then
+		     W = WIJ
+		  elseif pwt(J,I,WJI) then
+		     W = WJI
+		  end,
+		  %%println(W),
+	      DT[J,I] #= (RT[J,I] + OT[J,I]) mod (2 * W), 
+	      DT[I,J] #= DT[J,I]
+	   end
+	end,
+	KS #= sum(SD)//2,
+        foreach(I in 1..N)
+           OT[I,I] := 0, RT[I,I] := 0,
+           foreach (J in 1..I-1)
+              if pwt(I,J,W) then
+		         OT[I,J] #= W, OT[J,I] #= 0
+	          elseif pwt(J,I,W) then
+                 OT[I,J] #= 0, OT[J,I] #= W
+              end,
+              OT[I,J] + OT[J,I] #= W,
+			  RT[I,J] #= 0 #^ RT[I,J] #= W,
+			  RT[J,I] #= 0 #^ RT[J,I] #= W,
+              RT[I,J] + RT[J,I] #= W
+           end
+        end,
+
+	all_different(ID), %%% CONSTRAINT THE RT TO BE A TOURNAMENT: A LINEAR ORDER
+	%%%% FOR ONE SOLUTION
+	solve($[min(KS)],  {ID}++{{KS}}++{SD}++RT++DT++OT),
+	%%% println(od=OD), println(sd=SD), println(rt=RT), println(ot=OT), println(dt=DT),
+    foreach (J in 1..N)
+             if ID[J] == 0 then
+                println(winner=J),println(cost=KS) %%%,println(RT),println(OT),println(DT),println(ID)
+             end
+	end. 

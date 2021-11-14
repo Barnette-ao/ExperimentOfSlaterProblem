@@ -1,0 +1,36 @@
+import build_tournament.
+
+table
+borda_score(C,S) => 
+    Outs = findall(N, edge(C,_, N)), 
+    Ins = findall(N, edge(_,C,N)),
+    S = sum(Outs) - sum(Ins).
+    % the borda score of candidate C is S
+
+winner_score() = WS =>
+    WS := 0,
+    candidate(L),
+    foreach(C in L)
+        borda_score(C,S),
+        if WS < S then
+            WS := S
+        end
+    end. 
+
+winners() = WL =>  
+    WL=[],
+    WS := winner_score(),
+    candidate(L),
+    foreach(D in L)
+        borda_score(D,S),
+        if S == WS then
+            append(WL, [D], WLL),
+            WL := WLL
+        end
+    end.
+    % WL  is the winner list
+
+main(Files) =>
+    load(Files),
+    winners() = WL,
+    println(borda_winners=WL).
