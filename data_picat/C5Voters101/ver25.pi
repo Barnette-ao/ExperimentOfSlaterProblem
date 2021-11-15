@@ -1,0 +1,22 @@
+votes(95,3,1,1).
+votes(95,1,2,1).
+votes(95,2,3,1).
+votes(95,5,4,1).
+votes(95,4,5,1).
+votes(1,1,1,2).
+votes(1,2,2,2).
+votes(1,5,3,2).
+votes(1,4,4,2).
+votes(1,3,5,2).
+votes(4,3,1,3).
+votes(4,5,2,3).
+votes(4,1,3,3).
+votes(4,4,4,3).
+votes(4,2,5,3).
+votes(1,3,1,4).
+votes(1,5,2,4).
+votes(1,4,3,4).
+votes(1,1,4,4).
+votes(1,2,5,4).
+candidate(1 .. 5).
+voters(101).
