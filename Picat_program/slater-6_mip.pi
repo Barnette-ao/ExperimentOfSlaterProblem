@@ -91,7 +91,7 @@ similar_candidate_list(WL) = SL =>
     while(len(TL) > 2 && Fail < N*N)
         while( member(X,TL) && member(Y, TL) && X != Y && FailArray[X,Y] != 1 && FailArray[Y,X] != 1) %%% here " FailArray[X,Y] != 1 && FailArray[Y,X] != 1" should be at the end of the condition  
                 SL2 := similar_candidate_2(X, Y, L),  
-                if  len(SL2) != 2  && len(SL2) < N then %% SL2 is a nontrivial similar candidate set
+                if  len(SL2) > 1  && len(SL2) < N then %% SL2 is a nontrivial similar candidate set
                     Weight := sum([get(WL, SL2[K]) : K in 1..len(SL2)]),
                     SL := SL ++ [(SL2, Weight)],   
                     TL := subtract(sort(TL), sort(SL2) )
