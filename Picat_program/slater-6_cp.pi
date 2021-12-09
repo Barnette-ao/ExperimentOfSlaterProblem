@@ -57,8 +57,16 @@ similar_candidate_2(X, Y, E) = SC =>
                 true
             end 
         end
+    end,
+    if len(SC) == 2 then
+	if different_terms(OutX,OutY) then
+		true		
+	elseif different_terms(InX,InY) then
+		true
+	else 
+		SC := SC
+	end
     end.
-
 /*
     WL is a map with keys are the candidate list and the values are the weigth of each candidate
     SL is the list of similar candidates of pairs {S, W}: W is the weight of the set S of similar candidate 
@@ -79,7 +87,7 @@ similar_candidate_list(WL) = SL =>
     end,
     TL := L, 
 	Fail := N,
-    while(len(TL) >= 3 && Fail < N*N)
+    while(len(TL) > 2 && Fail < N*N)
         while( member(X,TL) && member(Y, TL) && X != Y && FailArray[X,Y] != 1 && FailArray[Y,X] != 1) %%% here " FailArray[X,Y] != 1 && FailArray[Y,X] != 1" should be at the end of the condition  
                 SL2 := similar_candidate_2(X, Y, L),  
                 if  len(SL2) != 2  && len(SL2) < N then %% SL2 is a nontrivial similar candidate set
@@ -89,7 +97,6 @@ similar_candidate_list(WL) = SL =>
                 else
                     FailArray[X,Y] := 1, FailArray[Y,X] := 1, Fail := Fail + 2
                 end
-            
         end 
     end,  
     %%% Each candidate in the remaining candidates TL is a similar candidate, then append it to SL
